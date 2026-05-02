@@ -71,8 +71,8 @@ def main() -> None:
     values.setdefault("MEDIA_ROOT", "/app/media")
     values.setdefault("MEDIA_URL", "/media")
     values.setdefault("AVATAR_MAX_BYTES", "2000000")
-    values.setdefault("CORS_ORIGINS", "http://localhost:3000")
-    values.setdefault("PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    values.setdefault("CORS_ORIGINS", "http://localhost:6288")
+    values.setdefault("PUBLIC_FRONTEND_URL", "http://localhost:6288")
     values.setdefault("ADMIN_BOOTSTRAP_EMAILS", "")
 
     if is_missing(values.get("POSTGRES_PASSWORD")):

@@ -448,7 +448,7 @@ git clone <repo>
 python3 scripts/bootstrap-env.py
 # 编辑 .env，只修改 ADMIN_BOOTSTRAP_EMAILS=you@example.com
 docker compose up -d --build
-# 浏览器打开 http://localhost:3000
+# 浏览器打开 http://localhost:6288
 ```
 
 前端通过同源 `/api` 与 `/media` 访问后端，Docker 内部代理到 `api:8000`，无需手动配置公开后端地址。

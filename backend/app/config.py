@@ -6,8 +6,8 @@ class Settings(BaseSettings):
     REDIS_URL: str
     JWT_SECRET: str
     MASTER_KEY: str
-    CORS_ORIGINS: str = "http://localhost:3000"
-    PUBLIC_FRONTEND_URL: str = "http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:6288"
+    PUBLIC_FRONTEND_URL: str = "http://localhost:6288"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ADMIN_BOOTSTRAP_EMAILS: str = ""
