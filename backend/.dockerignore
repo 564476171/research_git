@@ -1,0 +1,11 @@
+__pycache__
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+.git
+.gitignore
+.dockerignore
+Dockerfile
+README.md
