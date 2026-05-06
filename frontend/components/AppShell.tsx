@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, ReactNode } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 
@@ -63,21 +63,24 @@ function WorkspaceSwitcher() {
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(!open)}
-        className="flex h-9 max-w-[14rem] items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 text-[13px] text-violet-100/80 backdrop-blur-xl transition-all hover:border-fuchsia-300/35 hover:bg-white/15 hover:text-white"
+        onClick={() => setOpen((prev) => !prev)}
+        className="chrome-button max-w-[9.5rem] sm:max-w-[15rem]"
       >
-        <span className="truncate font-semibold text-white">
+        <span className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-faint)] sm:inline">
+          {t.common.workspace}
+        </span>
+        <span className="truncate font-medium text-[var(--text-primary)]">
           {current?.name ?? t.common.workspaces}
         </span>
         <ChevronDown />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-3xl border border-white/15 bg-slate-950/80 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
-          <div className="px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-100/55">
+        <div className="menu-panel absolute left-0 top-full z-20 mt-2 w-72 overflow-hidden">
+          <div className="px-3 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-faint)]">
             {t.common.workspaces}
           </div>
-          <ul className="max-h-72 overflow-y-auto px-2 pb-2">
+          <ul className="max-h-72 overflow-y-auto px-1 pb-1">
             {workspaces.map((w) => {
               const active = w.id === params?.wid;
               return (
@@ -85,14 +88,14 @@ function WorkspaceSwitcher() {
                   <Link
                     href={`/w/${w.id}`}
                     onClick={() => setOpen(false)}
-                    className={`flex h-10 items-center justify-between gap-2 rounded-2xl px-3 text-[13px] transition-all ${
+                    className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[13px] transition-all ${
                       active
-                        ? 'bg-gradient-to-r from-violet-500/25 to-fuchsia-500/25 text-white'
-                        : 'text-violet-100/75 hover:bg-white/10 hover:text-white'
+                        ? 'bg-[var(--surface-bg)] text-[var(--text-primary)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]'
                     }`}
                   >
-                    <span className="truncate font-semibold">{w.name}</span>
-                    <span className="shrink-0 text-[11px] capitalize text-violet-100/55">
+                    <span className="truncate font-medium">{w.name}</span>
+                    <span className="shrink-0 text-[11px] text-[var(--text-faint)]">
                       {w.mode === 'team' ? t.modes.team : t.modes.personal}
                     </span>
                   </Link>
@@ -100,16 +103,16 @@ function WorkspaceSwitcher() {
               );
             })}
             {workspaces.length === 0 && (
-              <li className="px-2 py-3 text-center text-[13px] text-violet-100/55">
+              <li className="px-3 py-3 text-center text-[13px] text-[var(--text-faint)]">
                 {t.common.noneYet}
               </li>
             )}
           </ul>
-          <div className="border-t border-white/10 p-2">
+          <div className="border-t px-2 py-2" style={{ borderColor: 'var(--surface-border)' }}>
             <Link
               href="/workspaces/new"
               onClick={() => setOpen(false)}
-              className="flex h-10 items-center gap-2 rounded-2xl px-3 text-[13px] font-semibold text-white transition-all hover:bg-white/10"
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-medium text-[var(--text-primary)] transition-all hover:bg-[var(--surface-bg)]"
             >
               <PlusIcon />
               {t.dashboard.newWorkspace}
@@ -138,35 +141,35 @@ function UserMenu() {
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(!open)}
-        className="rounded-full transition-all hover:-translate-y-0.5"
+        onClick={() => setOpen((prev) => !prev)}
+        className="rounded-full transition-all hover:opacity-85"
         aria-label={t.common.account}
       >
         <Avatar src={user?.avatar_url} name={user?.display_name} email={user?.email} size="md" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-3xl border border-white/15 bg-slate-950/85 p-2 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
+        <div className="menu-panel absolute right-0 top-full z-20 mt-2 w-64">
           <div className="px-3 pb-3 pt-2">
             <div className="flex min-w-0 items-center gap-3">
               <Avatar src={user?.avatar_url} name={user?.display_name} email={user?.email} size="sm" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold text-white">
+                <div className="truncate text-[13px] font-medium text-[var(--text-primary)]">
                   {user?.display_name || user?.email || t.common.account}
                 </div>
-                {user?.email && <div className="truncate text-[12px] text-violet-100/50">{user.email}</div>}
+                {user?.email && <div className="truncate text-[12px] text-[var(--text-faint)]">{user.email}</div>}
               </div>
             </div>
             {user?.is_global_admin && (
-              <div className="mt-3 inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-100">
+              <div className="mt-3 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium" style={{ borderColor: 'var(--surface-border)', background: 'var(--surface-bg)' }}>
                 {t.roles.globalAdmin}
               </div>
             )}
           </div>
-          <div className="border-t border-white/10 pt-2">
+          <div className="border-t pt-2" style={{ borderColor: 'var(--surface-border)' }}>
             <Link
               href="/profile"
               onClick={() => setOpen(false)}
-              className="flex h-10 w-full items-center rounded-2xl px-3 text-left text-[13px] font-semibold text-violet-100/80 transition-all hover:bg-white/10 hover:text-white"
+              className="flex h-10 w-full items-center rounded-xl px-3 text-left text-[13px] font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]"
             >
               {t.common.profile}
             </Link>
@@ -174,7 +177,7 @@ function UserMenu() {
               <Link
                 href="/admin"
                 onClick={() => setOpen(false)}
-                className="flex h-10 w-full items-center rounded-2xl px-3 text-left text-[13px] font-semibold text-violet-100/80 transition-all hover:bg-white/10 hover:text-white"
+                className="flex h-10 w-full items-center rounded-xl px-3 text-left text-[13px] font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]"
               >
                 {t.common.adminConsole}
               </Link>
@@ -184,7 +187,7 @@ function UserMenu() {
                 setOpen(false);
                 logout();
               }}
-              className="flex h-10 w-full items-center rounded-2xl px-3 text-left text-[13px] font-semibold text-violet-100/80 transition-all hover:bg-white/10 hover:text-white"
+              className="flex h-10 w-full items-center rounded-xl px-3 text-left text-[13px] font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]"
             >
               {t.common.signOut}
             </button>
@@ -206,34 +209,35 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   if (loading || !isAuthed) {
     return (
-      <div className="app-gradient flex min-h-screen items-center justify-center text-[13px] font-semibold text-violet-100/70">
-        <div className="glass-panel px-5 py-3">{t.common.loading}</div>
+      <div className="app-gradient flex min-h-screen items-center justify-center px-6">
+        <div className="surface px-5 py-3 text-[13px] font-medium text-[var(--text-secondary)]">{t.common.loading}</div>
       </div>
     );
   }
 
   return (
-    <div className="app-gradient min-h-screen">
-      <div className="gradient-orb -left-24 top-12 h-72 w-72 bg-violet-500/30" />
-      <div className="gradient-orb right-0 top-24 h-80 w-80 bg-fuchsia-500/20" />
-      <div className="gradient-orb bottom-0 left-1/3 h-80 w-80 bg-cyan-500/10" />
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-slate-950/40 backdrop-blur-2xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className="app-gradient">
+      <header className="sticky top-0 z-10 border-b" style={{ borderColor: 'var(--surface-border)', background: 'var(--header-bg)' }}>
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <Link href="/" className="flex shrink-0 items-center">
               <Brand size="md" responsive />
             </Link>
-            <span className="hidden text-violet-100/25 sm:inline">/</span>
+            <span className="hidden text-[var(--text-faint)] sm:inline">/</span>
             <WorkspaceSwitcher />
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <LanguageToggle />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="hidden items-center rounded-full border border-[var(--surface-border)] bg-[var(--canvas)] p-1 sm:flex">
+              <ThemeToggle className="h-8 border-0 bg-transparent px-2.5 shadow-none hover:shadow-none sm:w-auto" />
+              <LanguageToggle className="h-8 border-0 bg-transparent px-2.5 shadow-none hover:shadow-none" />
+            </div>
+            <ThemeToggle className="w-9 justify-center px-0 sm:hidden" />
+            <LanguageToggle className="px-2.5 sm:hidden" />
             <UserMenu />
           </div>
         </div>
       </header>
-      <main className="relative z-[1] mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">{children}</main>
     </div>
   );
 }

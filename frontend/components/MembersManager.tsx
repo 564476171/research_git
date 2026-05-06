@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 
@@ -38,6 +39,8 @@ export default function MembersManager({ workspaceId, currentRole, isTeam }: Mem
   const [loaded, setLoaded] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<Member | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -56,13 +59,16 @@ export default function MembersManager({ workspaceId, currentRole, isTeam }: Mem
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
-  const remove = async (uid: string) => {
-    if (!confirm(t.members.removeConfirm)) return;
+  const remove = async (member: Member) => {
+    setRemovingId(member.user_id);
     try {
-      await api.delete(`/api/workspaces/${workspaceId}/members/${uid}`);
-      load();
+      await api.delete(`/api/workspaces/${workspaceId}/members/${member.user_id}`);
+      await load();
     } catch (e: any) {
       setError(e?.response?.data?.detail || e.message);
+    } finally {
+      setRemovingId((current) => (current === member.user_id ? null : current));
+      setPendingRemove((current) => (current?.user_id === member.user_id ? null : current));
     }
   };
 
@@ -71,16 +77,16 @@ export default function MembersManager({ workspaceId, currentRole, isTeam }: Mem
   if (!isTeam) {
     return (
       <section className="surface px-6 py-12 text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-400/30 to-fuchsia-400/30 text-fuchsia-100">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border text-[var(--accent-primary)]" style={{ borderColor: 'var(--surface-border)', background: 'var(--surface-bg-strong)' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21c0-4 4-7 8-7s8 3 8 7" />
           </svg>
         </div>
-        <h3 className="mb-2 text-[15px] font-semibold tracking-[-0.01em] text-white">
+        <h3 className="mb-2 text-[15px] font-medium tracking-[-0.01em] text-[var(--text-primary)]">
           {t.members.personalTitle}
         </h3>
-        <p className="mx-auto max-w-sm text-[13px] text-violet-100/62">
+        <p className="mx-auto max-w-sm text-[13px] text-[var(--text-muted)]">
           {t.members.personalBody}
         </p>
       </section>
@@ -92,7 +98,7 @@ export default function MembersManager({ workspaceId, currentRole, isTeam }: Mem
       {error && <div className="alert-error mb-5">{error}</div>}
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[13px] text-violet-100/62">
+        <p className="text-[13px] text-[var(--text-muted)]">
           {members.length} {t.members.member}{t.common.languageShort === 'EN' && members.length === 1 ? '' : t.common.languageShort === 'EN' ? 's' : ''}.
           {isAdmin && ` ${t.members.addExisting}`}
         </p>
@@ -134,30 +140,33 @@ export default function MembersManager({ workspaceId, currentRole, isTeam }: Mem
       )}
 
       {loaded && (
-        <ul className="surface divide-y divide-white/10 overflow-hidden">
+        <ul className="surface divide-y overflow-hidden" style={{ borderColor: 'var(--surface-border)' }}>
           {members.map((m) => {
             const advisorOfNames = m.advisor_of
               .map((id) => members.find((x) => x.user_id === id))
               .filter(Boolean)
               .map((x) => memberName(x!));
             return (
-              <li key={m.user_id} className="flex flex-col gap-3 px-5 py-4 transition-all hover:bg-white/10 sm:flex-row sm:items-center">
+              <li key={m.user_id} className="flex flex-col gap-3 px-5 py-4 transition-all hover:bg-[var(--surface-bg-strong)] sm:flex-row sm:items-center">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-400 via-fuchsia-400 to-cyan-300 text-[13px] font-semibold text-white shadow-[0_14px_34px_-20px_rgba(217,70,239,1)]">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border text-[13px] font-semibold text-[var(--text-primary)]"
+                    style={{ borderColor: 'var(--surface-border)', background: 'var(--accent-soft)' }}
+                  >
                     {memberName(m).charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-[14px] font-semibold text-white">
+                      <span className="truncate text-[14px] font-semibold text-[var(--text-primary)]">
                         {memberName(m)}
                       </span>
-                      <span className="pill border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
+                      <span className="pill-accent">
                         {roleLabels[m.role] ?? m.role}
                       </span>
                     </div>
-                    <div className="truncate text-[12px] text-violet-100/55">{m.email}</div>
+                    <div className="truncate text-[12px] text-[var(--text-muted)]">{m.email}</div>
                     {m.role === 'advisor' && advisorOfNames.length > 0 && (
-                      <div className="mt-1 text-[11px] text-violet-100/45">
+                      <div className="mt-1 text-[11px] text-[var(--text-faint)]">
                         {t.members.supervises} {advisorOfNames.join(', ')}
                       </div>
                     )}
@@ -168,7 +177,7 @@ export default function MembersManager({ workspaceId, currentRole, isTeam }: Mem
                     <button onClick={() => setEditing(m)} className="btn-ghost">
                       {t.common.edit}
                     </button>
-                    <button onClick={() => remove(m.user_id)} className="btn-ghost text-red-100/70 hover:text-red-100">
+                    <button onClick={() => setPendingRemove(m)} className="btn-destructive">
                       {t.common.remove}
                     </button>
                   </div>
@@ -177,6 +186,19 @@ export default function MembersManager({ workspaceId, currentRole, isTeam }: Mem
             );
           })}
         </ul>
+      )}
+
+      {pendingRemove && (
+        <ConfirmDialog
+          open
+          title={t.common.remove}
+          message={t.members.removeConfirm}
+          detail={memberName(pendingRemove)}
+          confirmLabel={t.common.remove}
+          busy={removingId === pendingRemove.user_id}
+          onClose={() => setPendingRemove(null)}
+          onConfirm={() => void remove(pendingRemove)}
+        />
       )}
     </section>
   );
@@ -236,7 +258,7 @@ function MemberForm({ workspaceId, existing, students, onClose, onSaved }: Membe
 
   return (
     <form onSubmit={onSubmit} className="surface mb-5 space-y-4 p-5">
-      <h3 className="text-[14px] font-semibold text-white">
+      <h3 className="text-[14px] font-semibold text-[var(--text-primary)]">
         {existing ? `${t.members.editMember} ${existing.display_name || existing.email}` : t.members.addMember}
       </h3>
 
@@ -252,7 +274,7 @@ function MemberForm({ workspaceId, existing, students, onClose, onSaved }: Membe
             placeholder={t.members.placeholderEmail}
             className="input-field"
           />
-          <p className="mt-1.5 text-[11px] text-violet-100/42">
+          <p className="mt-1.5 text-[11px] text-[var(--text-faint)]">
             {t.members.registeredOnly}
           </p>
         </div>
@@ -268,8 +290,8 @@ function MemberForm({ workspaceId, existing, students, onClose, onSaved }: Membe
               onClick={() => setRole(r)}
               className={`h-10 rounded-full border px-3 text-[13px] font-semibold transition-all ${
                 role === r
-                  ? 'border-fuchsia-300/45 bg-gradient-to-r from-violet-500/35 to-fuchsia-500/35 text-white shadow-[0_12px_32px_-22px_rgba(217,70,239,1)]'
-                  : 'border-white/12 bg-white/[0.05] text-violet-100/65 hover:border-white/25 hover:bg-white/10 hover:text-white'
+                  ? 'border-[var(--accent-primary)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                  : 'border-[var(--surface-border)] bg-[var(--input-bg)] text-[var(--text-muted)] hover:border-[var(--accent-primary)] hover:bg-[var(--surface-bg-strong)] hover:text-[var(--text-primary)]'
               }`}
             >
               {roleLabels[r]}
@@ -282,7 +304,7 @@ function MemberForm({ workspaceId, existing, students, onClose, onSaved }: Membe
         <div>
           <label className="label-field">{t.members.supervises}</label>
           {students.length === 0 ? (
-            <p className="rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-[12px] text-violet-100/52">
+            <p className="rounded-2xl border px-3 py-2 text-[12px] text-[var(--text-muted)]" style={{ borderColor: 'var(--surface-border)', background: 'var(--surface-bg-strong)' }}>
               {t.members.addStudentsFirst}
             </p>
           ) : (
@@ -296,8 +318,8 @@ function MemberForm({ workspaceId, existing, students, onClose, onSaved }: Membe
                     onClick={() => toggleStudent(s.user_id)}
                     className={`pill cursor-pointer transition-all ${
                       active
-                        ? 'border-fuchsia-300/45 bg-gradient-to-r from-violet-500/35 to-fuchsia-500/35 text-white'
-                        : 'hover:bg-white/15 hover:text-white'
+                        ? 'border-[var(--accent-primary)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                        : 'hover:bg-[var(--surface-bg-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     {active && (

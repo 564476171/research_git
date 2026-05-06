@@ -144,6 +144,46 @@ PUBLIC_FRONTEND_URL=http://localhost:6288
 
 如果部署到服务器域名，例如 `https://example.com`，请在管理员后台改成对应前端域名。
 
+## 更新教程
+
+如果你已经部署过旧版本，可以按下面步骤更新：
+
+### 1. 检查本地状态
+
+```bash
+git status
+```
+
+如果本地还有你自己的改动，先自行提交或 stash，再继续拉取最新版本。
+
+### 2. 拉取最新代码
+
+```bash
+git pull origin main
+```
+
+### 3. 检查环境变量
+
+如果本次更新引入了新的环境变量，请对照 `.env.example` 和本文档补充到现有 `.env` 中。不要直接覆盖已经在使用的密钥。
+
+### 4. 重新构建并启动
+
+```bash
+docker compose up -d --build
+```
+
+### 5. 确认更新完成
+
+```bash
+docker compose ps
+docker compose logs -f api web
+```
+
+说明：
+
+- 后端容器启动时会自动执行 `alembic upgrade head`。
+- 如果只是重启当前版本而不是更新代码，可以直接使用 `docker compose restart`。
+
 ## 常用命令
 
 查看服务状态：

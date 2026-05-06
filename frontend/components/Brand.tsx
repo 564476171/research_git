@@ -13,7 +13,12 @@ export default function Brand({
   responsive = false,
   className = '',
 }: BrandProps) {
-  const iconSize = { sm: 16, md: 18, lg: 22 }[size];
+  const iconClass = {
+    sm: 'h-5 w-5',
+    md: 'h-6 w-6',
+    lg: 'h-7 w-7',
+  }[size];
+
   const textClass = {
     sm: 'text-[13px]',
     md: 'text-[14px]',
@@ -21,33 +26,31 @@ export default function Brand({
   }[size];
 
   return (
-    <div className={`flex items-center gap-2 text-white ${className}`}>
-      <span className="inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-violet-400 via-fuchsia-400 to-cyan-300 p-[1px] shadow-[0_12px_34px_-18px_rgba(217,70,239,0.9)]">
-        <span className="inline-flex items-center justify-center rounded-[11px] bg-slate-950/70 p-1 text-fuchsia-100 backdrop-blur-xl">
-          <svg
-            width={iconSize}
-            height={iconSize}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="6" y1="3" x2="6" y2="15" />
-            <circle cx="18" cy="6" r="2.5" />
-            <circle cx="6" cy="18" r="2.5" />
-            <path d="M18 8.5a9 9 0 0 1-9 9" />
-          </svg>
-        </span>
+    <div className={`flex items-center gap-2 text-[var(--text-primary)] ${className}`}>
+      <span className={`relative inline-flex items-center justify-center ${iconClass}`} aria-hidden="true">
+        <span className="absolute inset-0 rounded-[32%] border border-[rgba(204,120,92,0.2)] bg-[var(--surface-bg-strong)]" />
+        <span className="absolute left-[27%] top-[18%] h-[46%] w-[14%] rounded-full bg-[var(--text-primary)]" />
+        <span className="absolute right-[18%] top-[22%] h-[28%] w-[28%] rounded-full border-[2px] border-[var(--accent-primary)]" />
+        <span className="absolute left-[26%] bottom-[17%] h-[28%] w-[28%] rounded-full border-[2px] border-[var(--text-primary)]" />
+        <span className="absolute left-[40%] top-[47%] h-[2px] w-[34%] rounded-full bg-[var(--accent-primary)]" />
+        <span className="absolute left-[37%] top-[35%] h-[22%] w-[2px] rounded-full bg-[var(--accent-primary)]" />
       </span>
       {showText && (
-        <span
-          className={`font-semibold tracking-[-0.015em] ${textClass} ${
-            responsive ? 'hidden sm:inline' : ''
-          }`}
-        >
-          Research Git
+        <span className={`font-medium tracking-[-0.02em] ${textClass}`} aria-label="Research Git">
+          {responsive ? (
+            <>
+              <span aria-hidden="true" className="text-[var(--accent-primary)] sm:hidden">RG</span>
+              <span className="sr-only sm:not-sr-only sm:inline">
+                <span className="text-[var(--text-primary)]">Research</span>{' '}
+                <span className="text-[var(--accent-primary)]">Git</span>
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-[var(--text-primary)]">Research</span>{' '}
+              <span className="text-[var(--accent-primary)]">Git</span>
+            </>
+          )}
         </span>
       )}
     </div>

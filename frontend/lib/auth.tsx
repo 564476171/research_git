@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { api } from './api';
+import { api, AUTH_EXPIRED_EVENT, clearStoredTokens, getAccessToken, storeTokens } from './api';
 
 export interface UserProfile {
   id: string;
@@ -38,8 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
 
   const clearAuth = useCallback(() => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    clearStoredTokens();
     setIsAuthed(false);
     setUser(null);
   }, []);
@@ -53,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const init = async () => {
       if (typeof window === 'undefined') return;
-      const token = localStorage.getItem('access_token');
+      const token = getAccessToken();
       if (!token) {
         setLoading(false);
         return;
@@ -69,9 +68,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     init();
   }, [clearAuth, refreshUser]);
 
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      clearAuth();
+      router.push('/login');
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, [clearAuth, router]);
+
   const persistTokens = async (tokens: { access_token: string; refresh_token: string }) => {
-    localStorage.setItem('access_token', tokens.access_token);
-    localStorage.setItem('refresh_token', tokens.refresh_token);
+    storeTokens(tokens);
     await refreshUser();
   };
 

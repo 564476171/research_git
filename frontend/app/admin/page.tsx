@@ -6,11 +6,17 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import Avatar from '@/components/Avatar';
 import { ModeBadge } from '@/components/Badge';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useLanguage } from '@/lib/i18n';
 
 type RegistrationMode = 'open' | 'invite_code' | 'closed';
+
+type ConfirmState =
+  | { kind: 'delete-user'; user: AdminUser }
+  | { kind: 'delete-workspace'; workspace: AdminWorkspace }
+  | null;
 
 interface AdminStats {
   users: number;
@@ -92,15 +98,15 @@ function AdminSection({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full flex-col gap-3 px-5 py-5 text-left transition-all hover:bg-white/10 sm:flex-row sm:items-center sm:justify-between"
+        className="flex w-full flex-col gap-3 px-5 py-5 text-left transition-all hover:bg-[var(--surface-bg-strong)] sm:flex-row sm:items-center sm:justify-between"
       >
         <span>
-          <span className="block text-[18px] font-semibold tracking-[-0.03em] text-white">{title}</span>
-          <span className="mt-1 block text-[13px] text-violet-100/55">{description}</span>
+          <span className="block text-[18px] font-semibold tracking-[-0.03em] text-[var(--text-primary)]">{title}</span>
+          <span className="mt-1 block text-[13px] text-[var(--text-muted)]">{description}</span>
         </span>
         <span className="btn-ghost self-start sm:self-auto">{open ? t.common.collapse : t.common.expand}</span>
       </button>
-      {open && <div className="border-t border-white/10">{children}</div>}
+      {open && <div className="border-t" style={{ borderColor: 'var(--surface-border)' }}>{children}</div>}
     </section>
   );
 }
@@ -134,6 +140,7 @@ export default function AdminPage() {
   const [savingWorkspace, setSavingWorkspace] = useState(false);
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState({ deployment: true, registration: false, users: false, workspaces: false });
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPlatform, setSavingPlatform] = useState(false);
@@ -299,7 +306,6 @@ export default function AdminPage() {
   };
 
   const deleteUser = async (target: AdminUser) => {
-    if (!window.confirm(`${t.admin.deleteUserConfirm}\n\n${target.email}`)) return;
     setDeletingUserId(target.id);
     setError(null);
     try {
@@ -309,7 +315,8 @@ export default function AdminPage() {
     } catch (e: any) {
       setError(e?.response?.data?.detail || e.message);
     } finally {
-      setDeletingUserId(null);
+      setDeletingUserId((current) => (current === target.id ? null : current));
+      setConfirmState((current) => (current?.kind === 'delete-user' && current.user.id === target.id ? null : current));
     }
   };
 
@@ -337,7 +344,6 @@ export default function AdminPage() {
   };
 
   const deleteWorkspace = async (workspace: AdminWorkspace) => {
-    if (!window.confirm(`${t.admin.deleteWorkspaceConfirm}\n\n${workspace.name}`)) return;
     setDeletingWorkspaceId(workspace.id);
     setError(null);
     try {
@@ -347,7 +353,8 @@ export default function AdminPage() {
     } catch (e: any) {
       setError(e?.response?.data?.detail || e.message);
     } finally {
-      setDeletingWorkspaceId(null);
+      setDeletingWorkspaceId((current) => (current === workspace.id ? null : current));
+      setConfirmState((current) => (current?.kind === 'delete-workspace' && current.workspace.id === workspace.id ? null : current));
     }
   };
 
@@ -361,8 +368,8 @@ export default function AdminPage() {
     return (
       <AppShell>
         <div className="surface mx-auto max-w-xl px-6 py-12 text-center">
-          <h1 className="text-[26px] font-semibold tracking-[-0.04em] text-white">{t.admin.title}</h1>
-          <p className="mt-3 text-[14px] leading-6 text-violet-100/62">{t.admin.forbidden}</p>
+          <h1 className="text-[26px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">{t.admin.title}</h1>
+          <p className="mt-3 text-[14px] leading-6 text-[var(--text-muted)]">{t.admin.forbidden}</p>
         </div>
       </AppShell>
     );
@@ -371,14 +378,14 @@ export default function AdminPage() {
   return (
     <AppShell>
       <div className="space-y-8">
-        <header className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 backdrop-blur-xl sm:p-8">
-          <div className="mb-4 inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+        <header className="surface p-6 sm:p-8">
+          <div className="mb-4 inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent-primary)]" style={{ borderColor: 'rgba(204,120,92,0.22)', background: 'var(--accent-soft)' }}>
             {t.roles.globalAdmin}
           </div>
           <h1 className="gradient-text text-[36px] font-semibold leading-tight tracking-[-0.05em] sm:text-[52px]">
             {t.admin.title}
           </h1>
-          <p className="mt-3 max-w-2xl text-[14px] leading-6 text-violet-100/65">{t.admin.subtitle}</p>
+          <p className="mt-3 max-w-2xl text-[14px] leading-6 text-[var(--text-muted)]">{t.admin.subtitle}</p>
         </header>
 
         {error && <div className="alert-error">{error}</div>}
@@ -391,8 +398,8 @@ export default function AdminPage() {
             [t.admin.projects, stats?.projects ?? '—'],
           ].map(([label, value]) => (
             <div key={label} className="surface p-5">
-              <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-violet-100/50">{label}</div>
-              <div className="mt-3 text-[30px] font-semibold tracking-[-0.05em] text-white">{value}</div>
+              <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">{label}</div>
+              <div className="mt-3 text-[30px] font-semibold tracking-[-0.05em] text-[var(--text-primary)]">{value}</div>
             </div>
           ))}
         </section>
@@ -438,7 +445,7 @@ export default function AdminPage() {
             <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_360px]">
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-[14px] font-semibold tracking-[-0.02em] text-white">{t.admin.registrationMode}</h3>
+                  <h3 className="text-[14px] font-semibold tracking-[-0.02em] text-[var(--text-primary)]">{t.admin.registrationMode}</h3>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     {modeOptions.map(([mode, label]) => (
                       <button
@@ -455,31 +462,31 @@ export default function AdminPage() {
                 </div>
 
                 {generatedCode && (
-                  <div className="rounded-[1.25rem] border border-cyan-300/20 bg-cyan-300/10 p-4">
-                    <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-cyan-100/75">{t.admin.generatedInviteCode}</div>
-                    <div className="mt-2 break-all font-mono text-[14px] text-white">{generatedCode}</div>
+                  <div className="rounded-[1.25rem] border p-4" style={{ borderColor: 'rgba(204,120,92,0.22)', background: 'var(--accent-soft)' }}>
+                    <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--accent-primary)]">{t.admin.generatedInviteCode}</div>
+                    <div className="mt-2 break-all font-mono text-[14px] text-[var(--text-primary)]">{generatedCode}</div>
                   </div>
                 )}
 
                 <div>
-                  <h3 className="text-[14px] font-semibold tracking-[-0.02em] text-white">{t.admin.inviteCodes}</h3>
+                  <h3 className="text-[14px] font-semibold tracking-[-0.02em] text-[var(--text-primary)]">{t.admin.inviteCodes}</h3>
                   {registration?.invite_codes.length ? (
-                    <ul className="mt-3 divide-y divide-white/10 overflow-hidden rounded-[1.25rem] border border-white/10">
+                    <ul className="mt-3 divide-y overflow-hidden rounded-[1.25rem] border" style={{ borderColor: 'var(--surface-border)' }}>
                       {registration.invite_codes.map((inviteCode) => (
                         <li key={inviteCode.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className={inviteCode.active ? 'pill' : 'pill-dark'}>
+                              <span className={inviteCode.active ? 'pill-accent' : 'pill'}>
                                 {inviteCode.active ? t.admin.active : t.admin.inactive}
                               </span>
-                              <span className="text-[12px] text-violet-100/55">
+                              <span className="text-[12px] text-[var(--text-muted)]">
                                 {t.admin.usedCount}: {inviteCode.use_count}/{inviteCode.max_uses}
                               </span>
                             </div>
-                            <div className="mt-2 text-[12px] text-violet-100/50">
+                            <div className="mt-2 text-[12px] text-[var(--text-muted)]">
                               {t.admin.expiresAt}: {inviteCode.expires_at ? formatDate(inviteCode.expires_at, isZh) : t.admin.neverExpires}
                             </div>
-                            <div className="mt-1 text-[11px] text-violet-100/38">
+                            <div className="mt-1 text-[11px] text-[var(--text-faint)]">
                               {formatDate(inviteCode.created_at, isZh)}
                             </div>
                           </div>
@@ -490,13 +497,13 @@ export default function AdminPage() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-3 text-[13px] text-violet-100/52">{t.common.noneYet}</p>
+                    <p className="mt-3 text-[13px] text-[var(--text-muted)]">{t.common.noneYet}</p>
                   )}
                 </div>
               </div>
 
-              <form onSubmit={createInviteCode} className="h-fit rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4">
-                <h3 className="text-[14px] font-semibold tracking-[-0.02em] text-white">{t.admin.createInviteCode}</h3>
+              <form onSubmit={createInviteCode} className="surface h-fit p-4">
+                <h3 className="text-[14px] font-semibold tracking-[-0.02em] text-[var(--text-primary)]">{t.admin.createInviteCode}</h3>
                 <div className="mt-4 space-y-4">
                   <div>
                     <label className="label-field" htmlFor="invite-max-uses">{t.admin.maxUses}</label>
@@ -535,7 +542,7 @@ export default function AdminPage() {
             onToggle={() => toggleSection('users')}
           >
             <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-[13px] text-violet-100/55">{t.admin.searchUsers}</div>
+              <div className="text-[13px] text-[var(--text-muted)]">{t.admin.searchUsers}</div>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -555,19 +562,19 @@ export default function AdminPage() {
               </form>
             </div>
             {users.length > 0 ? (
-              <ul className="divide-y divide-white/10">
+              <ul className="divide-y" style={{ borderColor: 'var(--surface-border)' }}>
                 {users.map((item) => (
-                  <li key={item.id} className="px-5 py-4 transition-all hover:bg-white/10">
+                  <li key={item.id} className="px-5 py-4 transition-all hover:bg-[var(--surface-bg-strong)]">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                       <div className="flex min-w-0 flex-1 items-center gap-3">
                         <Avatar src={item.avatar_url} name={item.display_name} email={item.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate text-[14px] font-semibold text-white">{item.display_name || item.email}</span>
-                            {item.is_global_admin && <span className="pill-dark">{t.roles.globalAdmin}</span>}
+                            <span className="truncate text-[14px] font-semibold text-[var(--text-primary)]">{item.display_name || item.email}</span>
+                            {item.is_global_admin && <span className="pill-accent">{t.roles.globalAdmin}</span>}
                           </div>
-                          <div className="truncate text-[12px] text-violet-100/55">{item.email}</div>
-                          <div className="mt-1 text-[11px] text-violet-100/42">
+                          <div className="truncate text-[12px] text-[var(--text-muted)]">{item.email}</div>
+                          <div className="mt-1 text-[11px] text-[var(--text-faint)]">
                             {item.workspace_count} {t.admin.workspaces} · {item.project_count} {t.admin.projects} · {formatDate(item.created_at, isZh)}
                           </div>
                         </div>
@@ -582,9 +589,9 @@ export default function AdminPage() {
                         {item.id !== user?.id && (
                           <button
                             type="button"
-                            onClick={() => deleteUser(item)}
+                            onClick={() => setConfirmState({ kind: 'delete-user', user: item })}
                             disabled={deletingUserId === item.id}
-                            className="btn-ghost text-rose-100 hover:text-white"
+                            className="btn-destructive"
                           >
                             {t.admin.deleteUser}
                           </button>
@@ -592,7 +599,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                     {editingUserId === item.id && (
-                      <form onSubmit={saveUser} className="mt-4 grid gap-3 rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4 lg:grid-cols-2">
+                      <form onSubmit={saveUser} className="surface mt-4 grid gap-3 p-4 lg:grid-cols-2">
                         <div>
                           <label className="label-field" htmlFor={`admin-user-email-${item.id}`}>{t.admin.email}</label>
                           <input
@@ -631,7 +638,7 @@ export default function AdminPage() {
                             className="input-field"
                           />
                         </div>
-                        <label className="flex items-center gap-2 text-[13px] font-semibold text-violet-100/75">
+                        <label className="flex items-center gap-2 text-[13px] font-semibold text-[var(--text-muted)]">
                           <input
                             type="checkbox"
                             checked={userForm.is_global_admin}
@@ -653,7 +660,7 @@ export default function AdminPage() {
                 ))}
               </ul>
             ) : (
-              <p className="px-5 py-8 text-center text-[13px] text-violet-100/52">{t.admin.noUsers}</p>
+              <p className="px-5 py-8 text-center text-[13px] text-[var(--text-muted)]">{t.admin.noUsers}</p>
             )}
           </AdminSection>
 
@@ -664,7 +671,7 @@ export default function AdminPage() {
             onToggle={() => toggleSection('workspaces')}
           >
             <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-[13px] text-violet-100/55">{t.admin.searchWorkspaces}</div>
+              <div className="text-[13px] text-[var(--text-muted)]">{t.admin.searchWorkspaces}</div>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -684,19 +691,19 @@ export default function AdminPage() {
               </form>
             </div>
             {workspaces.length > 0 ? (
-              <ul className="divide-y divide-white/10">
+              <ul className="divide-y" style={{ borderColor: 'var(--surface-border)' }}>
                 {workspaces.map((workspace) => (
-                  <li key={workspace.id} className="px-5 py-4 transition-all hover:bg-white/10">
+                  <li key={workspace.id} className="px-5 py-4 transition-all hover:bg-[var(--surface-bg-strong)]">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate text-[15px] font-semibold text-white">{workspace.name}</span>
+                          <span className="truncate text-[15px] font-semibold text-[var(--text-primary)]">{workspace.name}</span>
                           <ModeBadge mode={workspace.mode} />
                         </div>
-                        <div className="mt-1 truncate text-[12px] text-violet-100/55">
+                        <div className="mt-1 truncate text-[12px] text-[var(--text-muted)]">
                           {t.admin.owner}: {workspace.owner_display_name || workspace.owner_email}
                         </div>
-                        <div className="mt-1 text-[11px] text-violet-100/42">
+                        <div className="mt-1 text-[11px] text-[var(--text-faint)]">
                           {workspace.member_count} {t.admin.members} · {workspace.project_count} {t.admin.projects} · {formatDate(workspace.created_at, isZh)}
                         </div>
                       </div>
@@ -709,16 +716,16 @@ export default function AdminPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => deleteWorkspace(workspace)}
+                          onClick={() => setConfirmState({ kind: 'delete-workspace', workspace })}
                           disabled={deletingWorkspaceId === workspace.id}
-                          className="btn-ghost text-rose-100 hover:text-white"
+                          className="btn-destructive"
                         >
                           {t.admin.deleteWorkspace}
                         </button>
                       </div>
                     </div>
                     {editingWorkspaceId === workspace.id && (
-                      <form onSubmit={saveWorkspace} className="mt-4 flex flex-col gap-3 rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4 sm:flex-row sm:items-end">
+                      <form onSubmit={saveWorkspace} className="surface mt-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
                         <div className="min-w-0 flex-1">
                           <label className="label-field" htmlFor={`admin-workspace-name-${workspace.id}`}>{t.workspace.workspaceName}</label>
                           <input
@@ -743,11 +750,29 @@ export default function AdminPage() {
                 ))}
               </ul>
             ) : (
-              <p className="px-5 py-8 text-center text-[13px] text-violet-100/52">{t.admin.noWorkspaces}</p>
+              <p className="px-5 py-8 text-center text-[13px] text-[var(--text-muted)]">{t.admin.noWorkspaces}</p>
             )}
           </AdminSection>
         </div>
       </div>
+      {confirmState && (
+        <ConfirmDialog
+          open
+          title={confirmState.kind === 'delete-user' ? t.admin.deleteUser : t.admin.deleteWorkspace}
+          message={confirmState.kind === 'delete-user' ? t.admin.deleteUserConfirm : t.admin.deleteWorkspaceConfirm}
+          detail={confirmState.kind === 'delete-user' ? confirmState.user.email : confirmState.workspace.name}
+          confirmLabel={t.common.delete}
+          busy={confirmState.kind === 'delete-user' ? deletingUserId === confirmState.user.id : deletingWorkspaceId === confirmState.workspace.id}
+          onClose={() => setConfirmState(null)}
+          onConfirm={() => {
+            if (confirmState.kind === 'delete-user') {
+              void deleteUser(confirmState.user);
+              return;
+            }
+            void deleteWorkspace(confirmState.workspace);
+          }}
+        />
+      )}
     </AppShell>
   );
 }

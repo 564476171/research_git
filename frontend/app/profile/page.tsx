@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     setDisplayName(user?.display_name ?? '');
     setInstitution(user?.institution ?? '');
@@ -87,18 +88,18 @@ export default function ProfilePage() {
   return (
     <AppShell>
       <div className="space-y-8">
-        <header className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 backdrop-blur-xl sm:p-8">
+        <header className="surface overflow-hidden p-6 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <Avatar src={user?.avatar_url} name={user?.display_name} email={user?.email} size="xl" />
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="pill">{t.common.account}</span>
-                {user?.is_global_admin && <span className="pill-dark">{t.roles.globalAdmin}</span>}
+                {user?.is_global_admin && <span className="pill-accent">{t.roles.globalAdmin}</span>}
               </div>
-              <h1 className="gradient-text truncate text-[36px] font-semibold leading-tight tracking-[-0.05em] sm:text-[52px]">
+              <h1 className="gradient-text text-[38px] leading-[0.94] sm:text-[54px]">
                 {user?.display_name || user?.email || t.profile.title}
               </h1>
-              <p className="mt-3 max-w-2xl text-[14px] leading-6 text-violet-100/65">
+              <p className="mt-4 max-w-2xl text-[15px] leading-7 text-[var(--text-muted)]">
                 {t.profile.subtitle}
               </p>
             </div>
@@ -106,7 +107,7 @@ export default function ProfilePage() {
         </header>
 
         {(error || message) && (
-          <div className={error ? 'alert-error' : 'surface px-4 py-3 text-[13px] text-violet-100/75'}>
+          <div className={error ? 'alert-error' : 'surface px-4 py-3 text-[13px] text-[var(--text-secondary)]'}>
             {error || message}
           </div>
         )}
@@ -114,8 +115,8 @@ export default function ProfilePage() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <form onSubmit={onSave} className="surface space-y-5 p-5 sm:p-6">
             <div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.03em] text-white">{t.profile.personalInfo}</h2>
-              <p className="mt-2 text-[13px] leading-6 text-violet-100/62">{t.profile.personalInfoHelp}</p>
+              <h2 className="text-[20px] font-medium tracking-[-0.03em] text-[var(--text-primary)]">{t.profile.personalInfo}</h2>
+              <p className="mt-2 text-[13px] leading-6 text-[var(--text-muted)]">{t.profile.personalInfoHelp}</p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -168,14 +169,14 @@ export default function ProfilePage() {
 
           <aside className="surface h-fit space-y-5 p-5 sm:p-6">
             <div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.03em] text-white">{t.profile.avatar}</h2>
-              <p className="mt-2 text-[13px] leading-6 text-violet-100/62">{t.profile.avatarHelp}</p>
+              <h2 className="text-[20px] font-medium tracking-[-0.03em] text-[var(--text-primary)]">{t.profile.avatar}</h2>
+              <p className="mt-2 text-[13px] leading-6 text-[var(--text-muted)]">{t.profile.avatarHelp}</p>
             </div>
             <div className="flex items-center gap-4">
               <Avatar src={user?.avatar_url} name={user?.display_name} email={user?.email} size="lg" />
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold text-white">{user?.display_name || user?.email}</div>
-                <div className="truncate text-[12px] text-violet-100/50">{user?.email}</div>
+                <div className="truncate text-[13px] font-medium text-[var(--text-primary)]">{user?.display_name || user?.email}</div>
+                <div className="truncate text-[12px] text-[var(--text-faint)]">{user?.email}</div>
               </div>
             </div>
             <div>
@@ -193,7 +194,7 @@ export default function ProfilePage() {
                 {uploading ? t.common.uploading : t.common.upload}
               </button>
               {user?.avatar_url && (
-                <button type="button" onClick={removeAvatar} disabled={uploading} className="btn-ghost text-red-100/70 hover:text-red-100">
+                <button type="button" onClick={removeAvatar} disabled={uploading} className="btn-destructive">
                   {t.profile.removeAvatar}
                 </button>
               )}

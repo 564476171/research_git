@@ -1,14 +1,14 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
-from app.auth.permissions import require_member
+from app.auth.permissions import require_admin_or_self, require_member
 from app.db import get_db
 from app.models import Project, User
-from app.schemas.project import ProjectCreate, ProjectResponse
+from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
 
 router = APIRouter(prefix="/api", tags=["projects"])
@@ -58,6 +58,8 @@ async def create_project(
     return project
 
 
+
+
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: uuid.UUID,
@@ -71,3 +73,45 @@ async def get_project(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
     await require_member(db, user.id, project.workspace_id)
     return project
+
+
+@router.patch("/projects/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: uuid.UUID,
+    payload: ProjectUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Project:
+    project = (
+        await db.execute(select(Project).where(Project.id == project_id))
+    ).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+
+    if project.owner_id != user.id:
+        await require_admin_or_self(db, user.id, project.workspace_id)
+
+    project.title = payload.title
+    await db.commit()
+    await db.refresh(project)
+    return project
+
+
+@router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    project = (
+        await db.execute(select(Project).where(Project.id == project_id))
+    ).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+
+    if project.owner_id != user.id:
+        await require_admin_or_self(db, user.id, project.workspace_id)
+
+    await db.delete(project)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

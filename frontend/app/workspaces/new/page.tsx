@@ -76,7 +76,7 @@ export default function NewWorkspacePage() {
 
   return (
     <AppShell>
-      <section className="flex min-h-[calc(100vh-8rem)] items-center justify-center">
+      <section className="flex min-h-[calc(100vh-8rem)] items-start justify-center py-4 sm:items-center sm:py-0">
         <div className="w-full max-w-3xl">
           <Link href="/" className="btn-ghost -ml-2 mb-6">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -86,15 +86,13 @@ export default function NewWorkspacePage() {
             {t.newWorkspace.back}
           </Link>
 
-          <div className="surface p-6 sm:p-8">
-            <header className="mb-8">
-              <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/70">
-                Mode selection
-              </p>
-              <h1 className="gradient-text text-[36px] font-semibold tracking-[-0.05em] sm:text-[48px]">
+          <div className="surface p-5 sm:p-8">
+            <header className="mb-7 sm:mb-8">
+              <p className="page-kicker mb-3">Mode selection</p>
+              <h1 className="gradient-text text-[40px] leading-[0.94] sm:text-[52px]">
                 {t.newWorkspace.title}
               </h1>
-              <p className="mt-2 text-[14px] leading-6 text-violet-100/65">
+              <p className="mt-3 text-[15px] leading-7 text-[var(--text-muted)]">
                 {t.newWorkspace.subtitle}
               </p>
             </header>
@@ -110,30 +108,30 @@ export default function NewWorkspacePage() {
                         type="button"
                         key={m.value}
                         onClick={() => setMode(m.value)}
-                        className={`text-left rounded-3xl border p-5 transition-all ${
+                        className={`flex min-h-[12.5rem] flex-col rounded-2xl border p-4 sm:p-5 text-left transition-all ${
                           active
-                            ? 'border-fuchsia-300/50 bg-gradient-to-br from-violet-500/25 via-purple-500/20 to-fuchsia-500/25 shadow-[0_22px_60px_-32px_rgba(217,70,239,1)]'
-                            : 'border-white/12 bg-white/[0.06] hover:-translate-y-1 hover:border-white/25 hover:bg-white/10'
+                            ? 'border-[var(--accent-primary)] bg-[var(--surface-bg-strong)] shadow-[0_18px_42px_-32px_rgba(204,120,92,0.48)]'
+                            : 'border-[var(--surface-border)] bg-[var(--surface-bg)] hover:-translate-y-0.5 hover:bg-[var(--surface-bg-strong)]'
                         }`}
                       >
                         <div className="mb-4 flex items-start justify-between">
-                          <span className="text-fuchsia-100">{ICONS[m.value]}</span>
+                          <span className="text-[var(--accent-primary)]">{ICONS[m.value]}</span>
                           {active && (
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400 text-white">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent-primary)] text-[var(--surface-bg)]">
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                               </svg>
                             </span>
                           )}
                         </div>
-                        <h3 className="mb-1 text-[16px] font-semibold tracking-[-0.02em] text-white">
+                        <h3 className="mb-1 text-[18px] font-medium tracking-[-0.02em] text-[var(--text-primary)]">
                           {m.title}
                         </h3>
-                        <p className="mb-4 text-[13px] leading-5 text-violet-100/62">{m.desc}</p>
-                        <ul className="space-y-1.5">
+                        <p className="mb-4 text-[13px] leading-6 text-[var(--text-muted)]">{m.desc}</p>
+                        <ul className="mt-auto space-y-1.5">
                           {m.features.map((f) => (
-                            <li key={f} className="flex items-start gap-2 text-[12px] text-violet-100/68">
-                              <span className="mt-1.5 h-1 w-1 rounded-full bg-fuchsia-300/80" />
+                            <li key={f} className="flex items-start gap-2 text-[12px] text-[var(--text-secondary)]">
+                              <span className="mt-1.5 h-1 w-1 rounded-full bg-[var(--accent-primary)]" />
                               <span>{f}</span>
                             </li>
                           ))}
@@ -153,7 +151,7 @@ export default function NewWorkspacePage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder={mode === 'personal' ? 'My research' : "Prof. Lin's group"}
+                  placeholder={mode === 'personal' ? 'My research' : "Prof. Lin\'s group"}
                   className="input-field"
                   autoFocus
                 />
@@ -161,11 +159,11 @@ export default function NewWorkspacePage() {
 
               {error && <div className="alert-error">{error}</div>}
 
-              <div className="flex items-center gap-2 pt-1">
-                <button type="submit" disabled={submitting} className="btn-primary">
+              <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
+                <button type="submit" disabled={submitting} className="btn-primary w-full justify-center sm:w-auto">
                   {submitting ? t.common.creating : t.newWorkspace.create}
                 </button>
-                <Link href="/" className="btn-ghost">{t.common.cancel}</Link>
+                <Link href="/" className="btn-ghost justify-center sm:justify-start">{t.common.cancel}</Link>
               </div>
             </form>
           </div>

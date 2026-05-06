@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 
@@ -39,6 +40,8 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
   const [loaded, setLoaded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ModelConfig | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ModelConfig | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -70,13 +73,16 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
     }
   };
 
-  const remove = async (id: string) => {
-    if (!confirm(t.models.deleteConfirm)) return;
+  const remove = async (config: ModelConfig) => {
+    setDeletingId(config.id);
     try {
-      await api.delete(`/api/models/${id}`);
-      load();
+      await api.delete(`/api/models/${config.id}`);
+      await load();
     } catch (e: any) {
       setError(e?.response?.data?.detail || e.message);
+    } finally {
+      setDeletingId((current) => (current === config.id ? null : current));
+      setPendingDelete((current) => (current?.id === config.id ? null : current));
     }
   };
 
@@ -86,13 +92,13 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
   const renderRow = (c: ModelConfig) => {
     const active = activeId === c.id;
     return (
-      <li key={c.id} className="flex flex-col gap-3 px-5 py-4 transition-all hover:bg-white/10 sm:flex-row sm:items-center">
+      <li key={c.id} className="flex flex-col gap-3 px-5 py-4 transition-all hover:bg-[var(--surface-bg-strong)] sm:flex-row sm:items-center">
         <button
           onClick={() => setActive(c.id)}
           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
             active
-              ? 'border-fuchsia-200 bg-gradient-to-r from-violet-400 to-fuchsia-400 shadow-[0_0_20px_rgba(217,70,239,0.8)]'
-              : 'border-white/25 bg-white/10 hover:border-fuchsia-200/70 hover:bg-white/15'
+              ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] shadow-[0_0_0_3px_rgba(204,120,92,0.16)]'
+              : 'border-[var(--surface-border)] bg-[var(--input-bg)] hover:border-[var(--accent-primary)] hover:bg-[var(--surface-bg-strong)]'
           }`}
           aria-label={active ? t.models.active : t.models.setActive}
         >
@@ -100,18 +106,14 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-[14px] font-semibold text-white">{c.name}</span>
-            {active && <span className="pill-dark">{t.models.active}</span>}
-            {c.is_default && (
-              <span className="pill border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
-                {t.models.default}
-              </span>
-            )}
+            <span className="truncate text-[14px] font-semibold text-[var(--text-primary)]">{c.name}</span>
+            {active && <span className="pill-accent">{t.models.active}</span>}
+            {c.is_default && <span className="pill">{t.models.default}</span>}
           </div>
-          <div className="mt-1 truncate text-[12px] text-violet-100/55">
-            <span className="font-mono text-violet-50/75">{c.model}</span>
+          <div className="mt-1 truncate text-[12px] text-[var(--text-muted)]">
+            <span className="font-mono text-[var(--text-secondary)]">{c.model}</span>
             {c.embedding_model && <span> · {c.embedding_model}</span>}
-            <span className="text-violet-100/30"> · </span>
+            <span className="text-[var(--text-faint)]"> · </span>
             <span className="font-mono">{getHost(c.base_url)}</span>
           </div>
         </div>
@@ -119,7 +121,7 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
           <button onClick={() => setEditing(c)} className="btn-ghost">
             {t.common.edit}
           </button>
-          <button onClick={() => remove(c.id)} className="btn-ghost text-red-100/70 hover:text-red-100">
+          <button onClick={() => setPendingDelete(c)} className="btn-destructive">
             {t.common.delete}
           </button>
         </div>
@@ -132,7 +134,7 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
       {error && <div className="alert-error mb-5">{error}</div>}
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-2xl text-[13px] leading-6 text-violet-100/62">
+        <p className="max-w-2xl text-[13px] leading-6 text-[var(--text-muted)]">
           {t.models.intro}
         </p>
         {!showForm && !editing && (
@@ -166,13 +168,13 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
       <div className="space-y-6">
         {isAdmin && (
           <div>
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-100/55">
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
               {t.models.shared}
             </h3>
             {shared.length > 0 ? (
-              <ul className="surface divide-y divide-white/10 overflow-hidden">{shared.map(renderRow)}</ul>
+              <ul className="surface divide-y overflow-hidden" style={{ borderColor: 'var(--surface-border)' }}>{shared.map(renderRow)}</ul>
             ) : (
-              <p className="surface px-5 py-6 text-center text-[13px] text-violet-100/52">
+              <p className="surface px-5 py-6 text-center text-[13px] text-[var(--text-muted)]">
                 {t.models.noShared}
               </p>
             )}
@@ -180,23 +182,36 @@ export default function ModelsManager({ workspaceId, currentRole }: ModelsManage
         )}
 
         <div>
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-100/55">
+          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
             {isAdmin ? t.models.personal : t.models.available}
           </h3>
           {!isAdmin && shared.length > 0 && (
-            <ul className="surface mb-3 divide-y divide-white/10 overflow-hidden">{shared.map(renderRow)}</ul>
+            <ul className="surface mb-3 divide-y overflow-hidden" style={{ borderColor: 'var(--surface-border)' }}>{shared.map(renderRow)}</ul>
           )}
           {personal.length > 0 ? (
-            <ul className="surface divide-y divide-white/10 overflow-hidden">{personal.map(renderRow)}</ul>
+            <ul className="surface divide-y overflow-hidden" style={{ borderColor: 'var(--surface-border)' }}>{personal.map(renderRow)}</ul>
           ) : (
             loaded && (
-              <p className="surface px-5 py-6 text-center text-[13px] text-violet-100/52">
+              <p className="surface px-5 py-6 text-center text-[13px] text-[var(--text-muted)]">
                 {t.models.nonePersonal}
               </p>
             )
           )}
         </div>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          open
+          title={t.common.delete}
+          message={t.models.deleteConfirm}
+          detail={pendingDelete.name}
+          confirmLabel={t.common.delete}
+          busy={deletingId === pendingDelete.id}
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => void remove(pendingDelete)}
+        />
+      )}
     </section>
   );
 }
@@ -265,7 +280,7 @@ export function ModelForm({ workspaceId, isAdmin, existing, fixedScope, onClose,
 
   return (
     <form onSubmit={onSubmit} className="surface mb-5 space-y-4 p-5">
-      <h3 className="text-[14px] font-semibold text-white">
+      <h3 className="text-[14px] font-semibold text-[var(--text-primary)]">
         {existing ? t.models.editModel : t.models.addModel}
       </h3>
 
@@ -280,8 +295,8 @@ export function ModelForm({ workspaceId, isAdmin, existing, fixedScope, onClose,
                 onClick={() => setScope(s)}
                 className={`h-10 rounded-full border px-3 text-[13px] font-semibold transition-all ${
                   scope === s
-                    ? 'border-fuchsia-300/45 bg-gradient-to-r from-violet-500/35 to-fuchsia-500/35 text-white shadow-[0_12px_32px_-22px_rgba(217,70,239,1)]'
-                    : 'border-white/12 bg-white/[0.05] text-violet-100/65 hover:border-white/25 hover:bg-white/10 hover:text-white'
+                    ? 'border-[var(--accent-primary)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                    : 'border-[var(--surface-border)] bg-[var(--input-bg)] text-[var(--text-muted)] hover:border-[var(--accent-primary)] hover:bg-[var(--surface-bg-strong)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 {s === 'workspace' ? t.models.sharedAdmin : t.models.personalOnly}
@@ -313,7 +328,7 @@ export function ModelForm({ workspaceId, isAdmin, existing, fixedScope, onClose,
           placeholder={t.models.basePlaceholder}
           className="input-field font-mono text-[13px]"
         />
-        <p className="mt-1.5 text-[11px] text-violet-100/42">
+        <p className="mt-1.5 text-[11px] text-[var(--text-faint)]">
           {t.models.baseHelp}
         </p>
       </div>
@@ -344,7 +359,7 @@ export function ModelForm({ workspaceId, isAdmin, existing, fixedScope, onClose,
 
       <div>
         <label className="label-field" htmlFor="m-key">
-          {t.models.apiKey} {existing && <span className="text-violet-100/42">{t.models.leaveBlank}</span>}
+          {t.models.apiKey} {existing && <span className="text-[var(--text-faint)]">{t.models.leaveBlank}</span>}
         </label>
         <input
           id="m-key"
@@ -358,12 +373,12 @@ export function ModelForm({ workspaceId, isAdmin, existing, fixedScope, onClose,
       </div>
 
       {scope === 'workspace' && isAdmin && (
-        <label className="flex items-center gap-2 text-[13px] text-violet-100/70">
+        <label className="flex items-center gap-2 text-[13px] text-[var(--text-muted)]">
           <input
             type="checkbox"
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
-            className="rounded border-white/20 bg-white/10 accent-fuchsia-400"
+            className="rounded border-[var(--surface-border)] bg-[var(--input-bg)] accent-[var(--accent-primary)]"
           />
           {t.models.workspaceDefault}
         </label>

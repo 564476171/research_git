@@ -121,7 +121,9 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(payload: RefreshRequest) -> TokenResponse:
+async def refresh(
+    payload: RefreshRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     try:
         decoded = decode_token(payload.refresh_token)
     except Exception:
@@ -134,7 +136,11 @@ async def refresh(payload: RefreshRequest) -> TokenResponse:
     if not sub:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token payload")
 
+    user = await db.get(User, sub)
+    if not user:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+
     return TokenResponse(
-        access_token=create_access_token(sub),
-        refresh_token=create_refresh_token(sub),
+        access_token=create_access_token(str(user.id)),
+        refresh_token=create_refresh_token(str(user.id)),
     )

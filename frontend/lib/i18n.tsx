@@ -34,8 +34,10 @@ const dictionaries = {
       upload: 'Upload',
       uploading: 'Uploading…',
       chooseFile: 'Choose file',
+      rename: 'Rename',
       expand: 'Expand',
       collapse: 'Collapse',
+      moreActions: 'More actions',
     },
     roles: {
       self: 'Owner',
@@ -144,6 +146,8 @@ const dictionaries = {
       branches: 'Branches',
       defaultBranch: 'default',
       head: 'HEAD',
+      deleteProject: 'Delete project',
+      deleteProjectConfirm: 'Delete this project? Branches, versions, reviews, AI conversations, and generated outputs will be permanently deleted.',
       deleteBranch: 'Delete branch',
       deleteBranchConfirm: 'Delete this branch? Commits and AI outputs are kept, but the branch pointer will be removed.',
       graph: 'Graph',
@@ -321,8 +325,10 @@ const dictionaries = {
       upload: '上传',
       uploading: '上传中…',
       chooseFile: '选择文件',
+      rename: '重命名',
       expand: '展开',
       collapse: '收起',
+      moreActions: '更多操作',
     },
     roles: {
       self: '所有者',
@@ -431,6 +437,8 @@ const dictionaries = {
       branches: '分支',
       defaultBranch: '默认',
       head: 'HEAD',
+      deleteProject: '删除项目',
+      deleteProjectConfirm: '确定删除这个项目？其分支、版本、评论、AI 对话与生成输出都会被永久删除。',
       deleteBranch: '删除分支',
       deleteBranchConfirm: '确定删除这个分支？版本与 AI 输出会保留，但分支指针会被移除。',
       graph: '图谱',
@@ -638,7 +646,7 @@ export function LanguageToggle({ className = '' }: { className?: string }) {
       className={`chrome-button ${className}`}
       aria-label={t.common.switchLanguage}
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-violet-300 to-fuchsia-300" />
+      <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)]" />
       {language === 'en' ? '中文' : 'EN'}
     </button>
   );

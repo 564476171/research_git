@@ -30,7 +30,8 @@ export default function Avatar({ src, name, email, size = 'md', className = '' }
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white/10 font-semibold uppercase tracking-[-0.04em] text-white shadow-[0_18px_42px_-24px_rgba(0,0,0,0.8)] ${sizes[size]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-[var(--surface-bg)] font-medium uppercase tracking-[-0.04em] text-[var(--text-primary)] ${sizes[size]} ${className}`}
+      style={{ borderColor: 'var(--surface-border)' }}
       aria-label={label}
     >
       {image ? (

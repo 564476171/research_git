@@ -31,9 +31,5 @@ export function RoleBadge({ role }: RoleBadgeProps) {
     global_admin: t.roles.globalAdmin,
   };
 
-  return (
-    <span className="pill border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
-      {roleLabels[role] ?? role}
-    </span>
-  );
+  return <span className="pill-accent">{roleLabels[role] ?? role}</span>;
 }

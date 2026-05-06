@@ -1,13 +1,15 @@
 'use client';
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-import { api } from '@/lib/api';
+import { api, authFetch } from '@/lib/api';
 import type { ModelConfig } from '@/components/ModelsManager';
 import AppShell from '@/components/AppShell';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useLanguage } from '@/lib/i18n';
+import { useAuth } from '@/lib/auth';
 
 interface Project {
   id: string;
@@ -15,6 +17,12 @@ interface Project {
   owner_id: string;
   title: string;
   description: string | null;
+}
+
+interface WorkspaceAccess {
+  id: string;
+  owner_id: string;
+  role: string;
 }
 
 interface Commit {
@@ -103,6 +111,23 @@ interface Review {
 }
 
 type EditorMode = 'edit' | 'preview' | 'split';
+
+type ConfirmState =
+  | { kind: 'delete-commit'; commitId: string }
+  | { kind: 'delete-branch'; branchId: string; branchName: string }
+  | { kind: 'delete-project'; projectTitle: string }
+  | { kind: 'clear-ai' }
+  | null;
+
+function MoreActionsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.25" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 function parseInlineMarkdown(value: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -299,8 +324,11 @@ function temporaryAiMessage(role: AiMessage['role'], content: string): AiMessage
 
 export default function ProjectPage() {
   const params = useParams<{ pid: string }>();
+  const router = useRouter();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
   const [project, setProject] = useState<Project | null>(null);
+  const [workspaceAccess, setWorkspaceAccess] = useState<WorkspaceAccess | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('');
@@ -322,17 +350,60 @@ export default function ProjectPage() {
   const [selectedAiModelId, setSelectedAiModelId] = useState('');
   const [aiModelsLoaded, setAiModelsLoaded] = useState(false);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [editingProjectTitle, setEditingProjectTitle] = useState(false);
+  const [projectTitleDraft, setProjectTitleDraft] = useState('');
+  const [savingProjectTitle, setSavingProjectTitle] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
   const latestBranchLoad = useRef<string | null>(null);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   const selectedBranch = useMemo(
     () => branches.find((branch) => branch.id === selectedBranchId) ?? null,
     [branches, selectedBranchId]
   );
+  const canManageWorkspace = Boolean(
+    workspaceAccess && user && (
+      workspaceAccess.owner_id === user.id ||
+      workspaceAccess.role === 'self' ||
+      workspaceAccess.role === 'admin' ||
+      workspaceAccess.role === 'global_admin' ||
+      user.is_global_admin
+    )
+  );
+
+  const canManageProject = Boolean(
+    project && user && (
+      project.owner_id === user.id ||
+      canManageWorkspace ||
+      user.is_global_admin
+    )
+  );
+  const canDeleteSelectedBranch = Boolean(selectedBranch && !selectedBranch.is_default);
+  const hasProjectActions = canManageProject || canDeleteSelectedBranch;
+
+  useEffect(() => {
+    if (!actionsMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setActionsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [actionsMenuOpen]);
 
   const loadProject = useCallback(async () => {
     try {
       const res = await api.get<Project>(`/api/projects/${params.pid}`);
       setProject(res.data);
+      const workspaceRes = await api.get<WorkspaceAccess[]>('/api/workspaces');
+      setWorkspaceAccess(
+        workspaceRes.data.find((workspace) => workspace.id === res.data.workspace_id) ?? null
+      );
     } catch (e: any) {
       setError(e?.response?.data?.detail || e.message);
     }
@@ -444,7 +515,6 @@ export default function ProjectPage() {
   };
 
   const deleteCommit = async (commit: Commit) => {
-    if (!window.confirm(t.project.deleteConfirm)) return;
     setError(null);
     try {
       await api.delete(`/api/commits/${commit.id}`);
@@ -456,6 +526,8 @@ export default function ProjectPage() {
       await refreshCurrentBranch();
     } catch (e: any) {
       setError(e?.response?.data?.detail || e.message);
+    } finally {
+      setConfirmState((current) => (current?.kind === 'delete-commit' && current.commitId === commit.id ? null : current));
     }
   };
 
@@ -468,7 +540,7 @@ export default function ProjectPage() {
   };
 
   const deleteBranch = async (branch: Branch) => {
-    if (branch.is_default || !window.confirm(`${t.project.deleteBranchConfirm}\n\n${branch.name}`)) return;
+    if (branch.is_default) return;
     setDeletingBranchId(branch.id);
     setError(null);
     try {
@@ -483,6 +555,7 @@ export default function ProjectPage() {
       setError(e?.response?.data?.detail || e.message);
     } finally {
       setDeletingBranchId(null);
+      setConfirmState((current) => (current?.kind === 'delete-branch' && current.branchId === branch.id ? null : current));
     }
   };
 
@@ -532,16 +605,57 @@ export default function ProjectPage() {
     if (aiOpen && project && !aiModelsLoaded) loadAiModels();
   }, [aiModelsLoaded, aiOpen, loadAiModels, project]);
 
+  const deleteProject = async () => {
+    if (!project) return;
+    setDeletingProject(true);
+    setError(null);
+    try {
+      await api.delete(`/api/projects/${params.pid}`);
+      router.push(`/w/${project.workspace_id}`);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e.message);
+      setDeletingProject(false);
+    } finally {
+      setConfirmState((current) => (current?.kind === 'delete-project' ? null : current));
+    }
+  };
+
+  const startProjectRename = () => {
+    setProjectTitleDraft(project?.title ?? '');
+    setEditingProjectTitle(true);
+    setActionsMenuOpen(false);
+    setError(null);
+  };
+
+  const cancelProjectRename = () => {
+    setEditingProjectTitle(false);
+    setProjectTitleDraft(project?.title ?? '');
+  };
+
+  const saveProjectTitle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!project || !projectTitleDraft.trim()) return;
+
+    setSavingProjectTitle(true);
+    setError(null);
+    try {
+      const res = await api.patch<Project>(`/api/projects/${params.pid}`, {
+        title: projectTitleDraft.trim(),
+      });
+      setProject(res.data);
+      setProjectTitleDraft(res.data.title);
+      setEditingProjectTitle(false);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || err.message);
+    } finally {
+      setSavingProjectTitle(false);
+    }
+  };
+
   const sendProjectAiMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = aiInput.trim();
     if (!value) return;
-
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setAiError('Missing access token');
-      return;
-    }
 
     const userMessage = temporaryAiMessage('user', value);
     const assistantMessage = temporaryAiMessage('assistant', '');
@@ -557,9 +671,7 @@ export default function ProjectPage() {
     if (selectedAiModelId) query.set('model_config_id', selectedAiModelId);
 
     try {
-      const response = await fetch(`/api/projects/${params.pid}/ai/chat/stream?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await authFetch(`/api/projects/${params.pid}/ai/chat/stream?${query.toString()}`);
       if (!response.ok || !response.body) {
         const detail = await response.text();
         throw new Error(detail || `AI request failed (${response.status})`);
@@ -620,7 +732,6 @@ export default function ProjectPage() {
   };
 
   const clearProjectAi = async () => {
-    if (!window.confirm(t.project.clearAiConfirm)) return;
     setAiError(null);
     try {
       await api.delete(`/api/projects/${params.pid}/ai/conversation`);
@@ -628,6 +739,8 @@ export default function ProjectPage() {
       setAiLoaded(true);
     } catch (e: any) {
       setAiError(e?.response?.data?.detail || e.message);
+    } finally {
+      setConfirmState((current) => (current?.kind === 'clear-ai' ? null : current));
     }
   };
 
@@ -643,19 +756,38 @@ export default function ProjectPage() {
             {t.project.backToWorkspace}
           </Link>
         )}
-        <header className="surface overflow-hidden p-6 sm:p-8">
+        <header className="surface overflow-visible p-6 sm:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.28em] text-fuchsia-200/70">
-                Research Git
-              </p>
-              <h1 className="gradient-text text-[34px] font-semibold leading-tight tracking-[-0.055em] sm:text-[52px]">
-                {project?.title ?? '—'}
-              </h1>
-              {project?.description && (
-                <p className="themed-muted mt-3 max-w-2xl text-[14px] leading-6">
-                  {project.description}
-                </p>
+            <div className="min-w-0 flex-1">
+              <p className="page-kicker mb-3">Research Git</p>
+              {editingProjectTitle ? (
+                <form onSubmit={saveProjectTitle} className="max-w-2xl space-y-3">
+                  <input
+                    value={projectTitleDraft}
+                    onChange={(e) => setProjectTitleDraft(e.target.value)}
+                    className="input-field h-11 text-[18px] sm:text-[20px]"
+                    autoFocus
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="submit" disabled={savingProjectTitle || !projectTitleDraft.trim()} className="btn-primary h-9 px-3 text-[12px]">
+                      {savingProjectTitle ? t.common.saving : t.common.saveChanges}
+                    </button>
+                    <button type="button" onClick={cancelProjectRename} className="btn-ghost h-9 px-2.5 text-[12px]">
+                      {t.common.cancel}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <h1 className="gradient-text text-[38px] leading-[0.94] sm:text-[54px]">
+                    {project?.title ?? '—'}
+                  </h1>
+                  {project?.description && (
+                    <p className="themed-muted mt-4 max-w-2xl text-[15px] leading-7">
+                      {project.description}
+                    </p>
+                  )}
+                </>
               )}
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
@@ -667,32 +799,69 @@ export default function ProjectPage() {
                 {t.project.projectAi}
               </button>
               {branches.length > 0 && (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <label className="min-w-[12rem]">
-                    <span className="sr-only">{t.project.branch}</span>
-                    <select
-                      id="project-branch"
-                      name="branch"
-                      value={selectedBranchId}
-                      onChange={(e) => setSelectedBranchId(e.target.value)}
-                      className="input-field h-10 rounded-full py-0 text-[13px]"
-                    >
-                      {branches.map((branch) => (
-                        <option key={branch.id} value={branch.id}>
-                          {branch.name}{branch.is_default ? ` · ${t.project.defaultBranch}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {selectedBranch && !selectedBranch.is_default && (
-                    <button
-                      type="button"
-                      onClick={() => deleteBranch(selectedBranch)}
-                      disabled={deletingBranchId === selectedBranch.id}
-                      className="btn-ghost text-rose-100 hover:text-white"
-                    >
-                      {t.project.deleteBranch}
-                    </button>
+                <label className="sm:min-w-[12rem]">
+                  <span className="sr-only">{t.project.branch}</span>
+                  <select
+                    id="project-branch"
+                    name="branch"
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    className="input-field h-10 py-0 text-[13px]"
+                  >
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}{branch.is_default ? ` · ${t.project.defaultBranch}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {hasProjectActions && (
+                <div ref={actionsMenuOpen ? actionsMenuRef : undefined} className="relative shrink-0 self-start">
+                  <button
+                    type="button"
+                    onClick={() => setActionsMenuOpen((current) => !current)}
+                    className="chrome-button h-9 w-9 justify-center px-0"
+                    aria-label={t.common.moreActions}
+                    title={t.common.moreActions}
+                  >
+                    <MoreActionsIcon />
+                  </button>
+                  {actionsMenuOpen && (
+                    <div className="menu-panel absolute right-0 top-full z-20 mt-2 w-56">
+                      {canManageProject && (
+                        <button type="button" onClick={startProjectRename} className="menu-item">
+                          {t.common.rename}
+                        </button>
+                      )}
+                      {canDeleteSelectedBranch && selectedBranch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmState({ kind: 'delete-branch', branchId: selectedBranch.id, branchName: selectedBranch.name });
+                            setActionsMenuOpen(false);
+                          }}
+                          disabled={deletingBranchId === selectedBranch.id}
+                          className="menu-item-danger"
+                        >
+                          {t.project.deleteBranch}
+                        </button>
+                      )}
+                      {canManageProject && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!project) return;
+                            setConfirmState({ kind: 'delete-project', projectTitle: project.title });
+                            setActionsMenuOpen(false);
+                          }}
+                          disabled={deletingProject}
+                          className="menu-item-danger"
+                        >
+                          {t.project.deleteProject}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -704,24 +873,24 @@ export default function ProjectPage() {
       {error && <div className="alert-error mb-6">{error}</div>}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <form onSubmit={onCommit} className="surface flex min-h-[620px] flex-col overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 pb-3 pt-4 sm:px-6" style={{ borderColor: 'var(--surface-border-soft)' }}>
+        <form onSubmit={onCommit} className="editor-panel flex min-h-[620px] flex-col overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 pb-3 pt-4 sm:px-6" style={{ borderColor: 'var(--editor-border)' }}>
             <div className="flex items-center gap-2">
-              <span className="themed-muted text-[11px] font-semibold uppercase tracking-[0.18em]">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--editor-muted)]">
                 {t.project.editor}
               </span>
-              <span className="pill">
+              <span className="editor-pill">
                 <span className="pill-dot" />
                 {t.project.markdown}
               </span>
               {selectedBranch && (
-                <span className="pill">
+                <span className="editor-pill">
                   <span className="pill-dot" />
                   {selectedBranch.name}
                 </span>
               )}
               {editingCommitId && (
-                <span className="pill-dark">
+                <span className="editor-pill">
                   {t.project.editVersion} · {shortId(editingCommitId)}
                 </span>
               )}
@@ -738,7 +907,7 @@ export default function ProjectPage() {
                   {t.project.splitMode}
                 </EditorModeButton>
               </div>
-              <span className="pill">
+              <span className="editor-pill">
                 {text.length.toLocaleString(localeFor(language))} {t.project.chars}
               </span>
               {editingCommitId && (
@@ -774,7 +943,7 @@ export default function ProjectPage() {
               </div>
             )}
           </div>
-          <div className="flex flex-col gap-3 border-t p-3 sm:flex-row sm:items-center" style={{ borderColor: 'var(--surface-border-soft)', background: 'var(--surface-bg)' }}>
+          <div className="flex flex-col gap-3 border-t p-3 sm:flex-row sm:items-center" style={{ borderColor: 'var(--editor-border)', background: 'var(--editor-surface-elevated)' }}>
             <input
               id="commit-message"
               name="message"
@@ -796,7 +965,7 @@ export default function ProjectPage() {
           </div>
         </form>
 
-        <aside className="space-y-5 xl:sticky xl:top-28 xl:self-start">
+        <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
           <GraphPanel
             graph={graph}
             branches={branches}
@@ -804,8 +973,6 @@ export default function ProjectPage() {
             selectedCommitId={expandedId}
             onSelectBranch={setSelectedBranchId}
             onSelectCommit={selectGraphCommit}
-            onDeleteBranch={deleteBranch}
-            deletingBranchId={deletingBranchId}
           />
 
           <div>
@@ -820,7 +987,7 @@ export default function ProjectPage() {
                   </p>
                 )}
               </div>
-              <span className="pill-dark">{commits.length}</span>
+              <span className="pill-accent">{commits.length}</span>
             </div>
             {commits.length === 0 ? (
               <p className="surface themed-muted px-5 py-6 text-center text-[13px]">
@@ -837,7 +1004,7 @@ export default function ProjectPage() {
                     editing={editingCommitId === c.id}
                     onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
                     onEdit={() => editCommit(c)}
-                    onDelete={() => deleteCommit(c)}
+                    onDelete={() => setConfirmState({ kind: 'delete-commit', commitId: c.id })}
                     onFork={(name) => forkCommit(c, name)}
                     onAiGenerated={refreshCurrentBranch}
                   />
@@ -861,7 +1028,68 @@ export default function ProjectPage() {
           onInput={setAiInput}
           onClose={() => setAiOpen(false)}
           onSubmit={sendProjectAiMessage}
-          onClear={clearProjectAi}
+          onRequestClear={() => setConfirmState({ kind: 'clear-ai' })}
+        />
+      )}
+      {confirmState && (
+        <ConfirmDialog
+          open
+          title={
+            confirmState.kind === 'delete-project'
+              ? t.project.deleteProject
+              : confirmState.kind === 'delete-branch'
+                ? t.project.deleteBranch
+                : confirmState.kind === 'delete-commit'
+                  ? t.project.deleteVersion
+                  : t.project.clearAiContext
+          }
+          message={
+            confirmState.kind === 'delete-project'
+              ? t.project.deleteProjectConfirm
+              : confirmState.kind === 'delete-branch'
+                ? t.project.deleteBranchConfirm
+                : confirmState.kind === 'delete-commit'
+                  ? t.project.deleteConfirm
+                  : t.project.clearAiConfirm
+          }
+          detail={
+            confirmState.kind === 'delete-project'
+              ? confirmState.projectTitle
+              : confirmState.kind === 'delete-branch'
+                ? confirmState.branchName
+                : null
+          }
+          confirmLabel={
+            confirmState.kind === 'clear-ai'
+              ? t.project.clearAiContext
+              : t.common.delete
+          }
+          tone={confirmState.kind === 'clear-ai' ? 'default' : 'danger'}
+          busy={
+            confirmState.kind === 'delete-project'
+              ? deletingProject
+              : confirmState.kind === 'delete-branch'
+                ? deletingBranchId === confirmState.branchId
+                : false
+          }
+          onClose={() => setConfirmState(null)}
+          onConfirm={() => {
+            if (confirmState.kind === 'delete-project') {
+              void deleteProject();
+              return;
+            }
+            if (confirmState.kind === 'delete-branch') {
+              const branch = branches.find((item) => item.id === confirmState.branchId);
+              if (branch) void deleteBranch(branch);
+              return;
+            }
+            if (confirmState.kind === 'delete-commit') {
+              const commit = commits.find((item) => item.id === confirmState.commitId);
+              if (commit) void deleteCommit(commit);
+              return;
+            }
+            void clearProjectAi();
+          }}
         />
       )}
     </AppShell>
@@ -870,12 +1098,12 @@ export default function ProjectPage() {
 
 function StatusDot({ status }: { status: Commit['status'] }) {
   if (status === 'pending') {
-    return <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.9)]" />;
+    return <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--accent-amber)] shadow-[0_0_0_3px_rgba(232,165,90,0.18)]" />;
   }
   if (status === 'failed') {
-    return <span className="h-2 w-2 rounded-full bg-red-300 shadow-[0_0_16px_rgba(252,165,165,0.85)]" />;
+    return <span className="h-2 w-2 rounded-full bg-[var(--error)] shadow-[0_0_0_3px_rgba(198,69,69,0.16)]" />;
   }
-  return <span className="h-2 w-2 rounded-full bg-gradient-to-r from-violet-300 to-fuchsia-300 shadow-[0_0_16px_rgba(217,70,239,0.75)]" />;
+  return <span className="h-2 w-2 rounded-full bg-[var(--accent-primary)] shadow-[0_0_0_3px_rgba(204,120,92,0.16)]" />;
 }
 
 function GraphPanel({
@@ -885,8 +1113,6 @@ function GraphPanel({
   selectedCommitId,
   onSelectBranch,
   onSelectCommit,
-  onDeleteBranch,
-  deletingBranchId,
 }: {
   graph: ProjectGraph | null;
   branches: Branch[];
@@ -894,8 +1120,6 @@ function GraphPanel({
   selectedCommitId: string | null;
   onSelectBranch: (branchId: string) => void;
   onSelectCommit: (commit: GraphCommit) => void;
-  onDeleteBranch: (branch: Branch) => void;
-  deletingBranchId: string | null;
 }) {
   const { t, language } = useLanguage();
   const baseBranches = graph?.branches.length ? graph.branches : branches;
@@ -1012,15 +1236,15 @@ function GraphPanel({
   );
 
   return (
-    <section className="surface overflow-hidden p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="surface overflow-hidden p-4 sm:p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="themed-muted text-[11px] font-semibold uppercase tracking-[0.18em]">
           {t.project.graph}
         </h2>
         <span className="pill">{lanes.length} {t.project.branches}</span>
       </div>
       {lanes.length > 0 && (
-        <div className="graph-branch-bar mb-3">
+        <div className="graph-branch-bar mb-4">
           {lanes.map((branch, index) => {
             const source = sourceByBranchId.get(branch.id);
             return (
@@ -1042,17 +1266,10 @@ function GraphPanel({
                     </span>
                   )}
                 </button>
-                {!branch.is_default && (
-                  <button
-                    type="button"
-                    onClick={() => onDeleteBranch(branch)}
-                    disabled={deletingBranchId === branch.id}
-                    className="ml-1 shrink-0 text-rose-100/75 transition-all hover:text-white disabled:opacity-45"
-                    aria-label={t.project.deleteBranch}
-                    title={t.project.deleteBranch}
-                  >
-                    ×
-                  </button>
+                {!branch.is_default && branch.id === selectedBranchId && (
+                  <span className="graph-ref-muted">
+                    {t.project.deleteBranch}
+                  </span>
                 )}
               </div>
             );
@@ -1123,8 +1340,8 @@ function GraphPanel({
                   style={{ top: index * rowHeight, height: rowHeight }}
                 >
                   <div className="graph-lanes" style={{ width: laneAreaWidth }} />
-                  <div className="min-w-0 flex-1 py-2.5">
-                    <div className="mb-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
+                  <div className="min-w-0 flex-1 py-3">
+                    <div className="mb-1.5 flex min-w-0 items-center gap-1.5 overflow-hidden">
                       <span className="graph-message truncate">
                         {commit.message || t.project.noMessage}
                       </span>
@@ -1156,7 +1373,7 @@ function GraphPanel({
 }
 
 function graphLaneColor(index: number) {
-  const colors = ['#8b5cf6', '#06b6d4', '#f97316', '#22c55e', '#ec4899', '#eab308'];
+  const colors = ['#cc785c', '#5db8a6', '#e8a55a', '#8c7b6b', '#b46a51', '#6f8f87'];
   return colors[index % colors.length];
 }
 
@@ -1172,7 +1389,7 @@ function ProjectAiDialog({
   onInput,
   onClose,
   onSubmit,
-  onClear,
+  onRequestClear,
 }: {
   messages: AiMessage[];
   modelConfigs: ModelConfig[];
@@ -1185,12 +1402,12 @@ function ProjectAiDialog({
   onInput: (value: string) => void;
   onClose: () => void;
   onSubmit: (event: React.FormEvent) => void;
-  onClear: () => void;
+  onRequestClear: () => void;
 }) {
   const { t } = useLanguage();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-3 backdrop-blur-sm sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(20,20,19,0.28)] p-3 sm:items-center sm:p-6">
       <section className="surface flex h-[min(760px,92vh)] w-full max-w-2xl flex-col overflow-hidden">
         <header className="flex items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--surface-border-soft)' }}>
           <div>
@@ -1202,7 +1419,7 @@ function ProjectAiDialog({
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onClear} className="btn-ghost">
+            <button type="button" onClick={onRequestClear} className="btn-ghost">
               {t.project.clearAiContext}
             </button>
             <button type="button" onClick={onClose} className="btn-ghost h-9 w-9 px-0" aria-label={t.common.cancel}>
@@ -1254,7 +1471,7 @@ function ProjectAiDialog({
                 <div
                   className={`max-w-[82%] rounded-3xl px-4 py-3 text-[13px] leading-6 ${
                     message.role === 'user'
-                      ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white'
+                      ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast)]'
                       : 'border themed-surface themed-text'
                   }`}
                 >
@@ -1399,15 +1616,15 @@ function CommitRow({
     kind === 'diff_summary' ? t.project.diffSummary : t.project.cumulativeSummary;
 
   return (
-    <li className={`surface overflow-hidden ${editing ? 'ring-1 ring-fuchsia-300/50' : ''}`}>
-      <div className="flex items-start gap-2 px-4 py-3.5 transition-all hover:bg-white/10">
+    <li className={`surface overflow-hidden ${editing ? 'ring-1 ring-[rgba(204,120,92,0.42)]' : ''}`}>
+      <div className="flex items-start gap-2 px-4 py-3.5 transition-all hover:bg-[var(--surface-bg-strong)] sm:gap-3 sm:px-4">
         <button onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-3 text-left">
           <div className="pt-1.5">
             <StatusDot status={commit.status} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="font-mono text-[11px] text-fuchsia-100/70">v{index}</span>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[11px] text-[var(--accent-primary)]">v{index}</span>
               <span className="themed-text truncate text-[13px] font-semibold">
                 {commit.message || t.project.noMessage}
               </span>
@@ -1419,21 +1636,21 @@ function CommitRow({
               </p>
             )}
             {commit.status === 'pending' && (
-              <p className="mt-1 text-[11px] text-cyan-100/70">{t.project.analyzing}</p>
+              <p className="mt-1 text-[11px] text-[var(--accent-amber)]">{t.project.analyzing}</p>
             )}
             {commit.status === 'failed' && (
-              <p className="mt-1 text-[11px] text-red-200">{t.project.failed}</p>
+              <p className="mt-1 text-[11px] text-[var(--error)]">{t.project.failed}</p>
             )}
             <p className="themed-faint mt-2 text-[11px]">
               {formatDate(commit.created_at, language)} · {shortId(commit.id)}
             </p>
           </div>
         </button>
-        <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
-          <button type="button" onClick={onEdit} className="btn-ghost h-8 px-2 text-[11px]">
+        <div className="flex shrink-0 flex-col gap-1 sm:flex-row sm:items-center">
+          <button type="button" onClick={onEdit} className="btn-ghost h-9 px-2.5 text-[11px]">
             {t.project.editVersion}
           </button>
-          <button type="button" onClick={() => runAi('diff_summary')} disabled={!!aiLoadingKind} className="btn-ghost h-8 px-2 text-[11px]">
+          <button type="button" onClick={() => runAi('diff_summary')} disabled={!!aiLoadingKind} className="btn-ghost h-9 px-2.5 text-[11px]">
             {aiLoadingKind === 'diff_summary' ? t.project.analyzing : t.project.ai}
           </button>
         </div>
@@ -1441,7 +1658,7 @@ function CommitRow({
 
       {expanded && (
         <div className="space-y-4 border-t px-4 py-4" style={{ borderColor: 'var(--surface-border-soft)' }}>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <button type="button" onClick={() => runAi('diff_summary')} disabled={!!aiLoadingKind} className="btn-secondary h-auto min-h-10 px-3 py-2 text-[12px]">
               {aiLoadingKind === 'diff_summary' ? t.project.analyzing : t.project.diffSummary}
             </button>
@@ -1451,7 +1668,7 @@ function CommitRow({
             <button type="button" onClick={() => setForkOpen((value) => !value)} className="btn-secondary h-auto min-h-10 px-3 py-2 text-[12px]">
               {t.project.fork}
             </button>
-            <button type="button" onClick={onDelete} className="btn-ghost h-auto min-h-10 px-3 py-2 text-[12px]">
+            <button type="button" onClick={onDelete} className="btn-destructive h-auto min-h-10 px-3 py-2 text-[12px]">
               {t.project.deleteVersion}
             </button>
           </div>
@@ -1487,7 +1704,7 @@ function CommitRow({
                 {aiOutputs.map((output) => (
                   <li key={output.id} className="rounded-2xl border px-3 py-2" style={{ borderColor: 'var(--surface-border-soft)', background: 'var(--input-bg)' }}>
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-semibold text-fuchsia-100/80">
+                      <span className="text-[11px] font-semibold text-[var(--accent-primary)]">
                         {aiLabel(output.kind)}
                       </span>
                       <span className="themed-faint text-[10px]">
@@ -1546,7 +1763,7 @@ function CommitRow({
                         {r.reviewer_display ?? t.project.reviewer}
                       </span>
                       {r.status === 'resolved' && (
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-cyan-100/65">
+                        <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--accent-amber)]">
                           {t.project.resolved}
                         </span>
                       )}
